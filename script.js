@@ -111,8 +111,7 @@ function sendLocationToServer(lat, lng) {
             updateFriendLocation(friendLocation.lat, friendLocation.lng);
             // 显示好友已上线提示
             showNotification('好友已上线');
-            // 调用AI分析
-            analyzeLocations(lat, lng, friendLocation.lat, friendLocation.lng);
+            // 不自动进行AI分析，等待用户点击按钮
         } else {
             // 好友未上线，只显示自己位置
             if (friendMarker) {
@@ -453,6 +452,51 @@ function initEventListeners() {
     document.getElementById('startShare').addEventListener('click', startSharing);
     document.getElementById('stopShare').addEventListener('click', stopSharing);
     document.getElementById('testApi').addEventListener('click', testApiConnection);
+    
+    // 添加归位按钮事件
+    const locateMeBtn = document.getElementById('locateMe');
+    if (locateMeBtn) {
+        locateMeBtn.addEventListener('click', function() {
+            if (userMarker) {
+                const userLatLng = userMarker.getLatLng();
+                map.setView(userLatLng, 15);
+            } else if (lastUserLocation) {
+                map.setView([lastUserLocation.lat, lastUserLocation.lng], 15);
+            }
+        });
+    }
+    
+    // 添加总览按钮事件
+    const overviewBtn = document.getElementById('overview');
+    if (overviewBtn) {
+        overviewBtn.addEventListener('click', function() {
+            if (userMarker && friendMarker) {
+                const userLatLng = userMarker.getLatLng();
+                const friendLatLng = friendMarker.getLatLng();
+                map.fitBounds(L.latLngBounds([userLatLng, friendLatLng]), { padding: [50, 50] });
+            }
+        });
+    }
+    
+    // 添加AI分析按钮事件
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    if (analyzeBtn) {
+        analyzeBtn.addEventListener('click', function() {
+            if (lastUserLocation && lastFriendLocation) {
+                // 调用AI分析
+                analyzeLocations(
+                    lastUserLocation.lat, lastUserLocation.lng,
+                    lastFriendLocation.lat, lastFriendLocation.lng
+                );
+            } else if (lastUserLocation) {
+                // 只有自己的位置，显示提示
+                showNotification('好友未上线，无法进行完整分析');
+            } else {
+                // 没有位置信息，显示提示
+                showNotification('无法获取位置信息，请检查位置权限');
+            }
+        });
+    }
 }
 
 // 页面加载完成后初始化
