@@ -85,6 +85,8 @@ function sendLocationToServer(lat, lng) {
     const userId = document.getElementById('userId').value || 'user1';
     const friendId = document.getElementById('friendId').value || 'user2';
     
+    console.log(`发送位置 - 用户ID: ${userId}, 好友ID: ${friendId}, 纬度: ${lat}, 经度: ${lng}`);
+    
     // 发送位置到PythonAnywhere后端
     fetch('https://fhw.pythonanywhere.com/api/location', {
         method: 'POST',
@@ -97,16 +99,28 @@ function sendLocationToServer(lat, lng) {
             lng: lng
         })
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
         console.log('位置发送成功:', data);
         
         // 获取好友位置
         return fetch(`https://fhw.pythonanywhere.com/api/location/${friendId}`);
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(friendLocation => {
-        if (friendLocation.lat && friendLocation.lng) {
+        console.log('获取好友位置:', friendLocation);
+        
+        if (friendLocation && friendLocation.lat && friendLocation.lng) {
             // 好友已上线
             updateFriendLocation(friendLocation.lat, friendLocation.lng);
             // 显示好友已上线提示
@@ -114,6 +128,7 @@ function sendLocationToServer(lat, lng) {
             // 不自动进行AI分析，等待用户点击按钮
         } else {
             // 好友未上线，只显示自己位置
+            console.log('好友未上线，没有位置信息');
             if (friendMarker) {
                 map.removeLayer(friendMarker);
                 friendMarker = null;
@@ -132,7 +147,7 @@ function sendLocationToServer(lat, lng) {
             friendMarker = null;
             lastFriendLocation = null;
         }
-        showNotification('好友未上线');
+        showNotification('无法连接到服务器，请检查网络');
     });
 }
 
@@ -454,34 +469,44 @@ function initEventListeners() {
     document.getElementById('testApi').addEventListener('click', testApiConnection);
     
     // 添加归位按钮事件
-    const locateMeBtn = document.getElementById('locateMe');
-    if (locateMeBtn) {
-        locateMeBtn.addEventListener('click', function() {
-            if (userMarker) {
-                const userLatLng = userMarker.getLatLng();
-                map.setView(userLatLng, 15);
-            } else if (lastUserLocation) {
-                map.setView([lastUserLocation.lat, lastUserLocation.lng], 15);
+    document.addEventListener('click', function(e) {
+        if (e.target.id === 'locateMe') {
+            if (map) {
+                if (userMarker) {
+                    const userLatLng = userMarker.getLatLng();
+                    map.setView(userLatLng, 15);
+                    showNotification('已定位到您的位置');
+                } else if (lastUserLocation) {
+                    map.setView([lastUserLocation.lat, lastUserLocation.lng], 15);
+                    showNotification('已定位到您的位置');
+                } else {
+                    showNotification('无法获取您的位置信息');
+                }
+            } else {
+                showNotification('地图未初始化');
             }
-        });
-    }
-    
-    // 添加总览按钮事件
-    const overviewBtn = document.getElementById('overview');
-    if (overviewBtn) {
-        overviewBtn.addEventListener('click', function() {
-            if (userMarker && friendMarker) {
-                const userLatLng = userMarker.getLatLng();
-                const friendLatLng = friendMarker.getLatLng();
-                map.fitBounds(L.latLngBounds([userLatLng, friendLatLng]), { padding: [50, 50] });
+        }
+        
+        // 总览按钮事件
+        if (e.target.id === 'overview') {
+            if (map) {
+                if (userMarker && friendMarker) {
+                    const userLatLng = userMarker.getLatLng();
+                    const friendLatLng = friendMarker.getLatLng();
+                    map.fitBounds(L.latLngBounds([userLatLng, friendLatLng]), { padding: [50, 50] });
+                    showNotification('已显示总览视图');
+                } else if (userMarker) {
+                    showNotification('好友未上线，无法显示总览');
+                } else {
+                    showNotification('无法获取位置信息');
+                }
+            } else {
+                showNotification('地图未初始化');
             }
-        });
-    }
-    
-    // 添加AI分析按钮事件
-    const analyzeBtn = document.getElementById('analyzeBtn');
-    if (analyzeBtn) {
-        analyzeBtn.addEventListener('click', function() {
+        }
+        
+        // AI分析按钮事件
+        if (e.target.id === 'analyzeBtn') {
             if (lastUserLocation && lastFriendLocation) {
                 // 调用AI分析
                 analyzeLocations(
@@ -495,8 +520,8 @@ function initEventListeners() {
                 // 没有位置信息，显示提示
                 showNotification('无法获取位置信息，请检查位置权限');
             }
-        });
-    }
+        }
+    });
 }
 
 // 页面加载完成后初始化
