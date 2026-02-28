@@ -11,12 +11,26 @@ const ANALYSIS_INTERVAL = 3 * 60 * 1000; // AI分析的最短间隔时间，单�
 
 // 初始化地图
 function initMap() {
-    map = L.map('map').setView([39.9042, 116.4074], 15); // 增加默认缩放级别
+    map = L.map('map').setView([39.9042, 116.4074], 18); // 进一步增加默认缩放级别
     
-    // 使用高德地图瓦片图层，显示更详细的地图信息
-    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}', {
+    // 使用高德地图高清瓦片图层，显示更详细的地图信息（使用style=6获取更详细的地图数据）
+    L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=2&style=6&x={x}&y={y}&z={z}', {
         subdomains: '1234',
-        attribution: '© 高德地图'
+        attribution: '© 高德地图',
+        maxZoom: 22, // 进一步增加最大缩放级别
+        tileSize: 256,
+        updateWhenIdle: true, // 优化性能
+        reuseTiles: true // 优化性能
+    }).addTo(map);
+    
+    // 添加缩放控件
+    L.control.zoom({
+        position: 'bottomright'
+    }).addTo(map);
+    
+    // 添加比例尺控件
+    L.control.scale({
+        position: 'bottomleft'
     }).addTo(map);
 }
 
@@ -75,15 +89,18 @@ function updateUserLocation(position) {
         // 更新最后位置
         lastUserLocation = { lat: latitude, lng: longitude };
         
-        // 模拟发送位置到服务器
+        // 移动地图到用户位置
+        map.setView(userCoords, 18);
+        
+        // 发送位置到服务器
         sendLocationToServer(latitude, longitude);
     }
 }
 
 // 发送位置到服务器
 function sendLocationToServer(lat, lng) {
-    const userId = document.getElementById('userId').value || 'user1';
-    const friendId = document.getElementById('friendId').value || 'user2';
+    const userId = document.getElementById('userId').value.trim() || 'user1';
+    const friendId = document.getElementById('friendId').value.trim() || 'user2';
     
     console.log(`发送位置 - 用户ID: ${userId}, 好友ID: ${friendId}, 纬度: ${lat}, 经度: ${lng}`);
     
@@ -108,8 +125,8 @@ function sendLocationToServer(lat, lng) {
     .then(data => {
         console.log('位置发送成功:', data);
         
-        // 获取好友位置
-        return fetch(`https://fhw.pythonanywhere.com/api/location/${friendId}`);
+        // 先获取所有位置，检查好友是否在列表中
+        return fetch('https://fhw.pythonanywhere.com/api/locations');
     })
     .then(response => {
         if (!response.ok) {
@@ -117,8 +134,36 @@ function sendLocationToServer(lat, lng) {
         }
         return response.json();
     })
-    .then(friendLocation => {
-        console.log('获取好友位置:', friendLocation);
+    .then(allLocations => {
+        console.log('获取所有位置:', allLocations);
+        
+        const userId = document.getElementById('userId').value.trim() || 'user1';
+        const friendId = document.getElementById('friendId').value.trim() || 'user2';
+        
+        console.log(`当前用户ID: ${userId}, 好友ID: ${friendId}`);
+        
+        // 检查好友位置
+        let friendLocation = null;
+        
+        // 处理不同格式的返回数据
+        if (typeof allLocations === 'object' && allLocations !== null) {
+            // 检查好友ID是否在返回的数据中
+            if (allLocations.hasOwnProperty(friendId)) {
+                friendLocation = allLocations[friendId];
+                console.log('找到好友位置:', friendLocation);
+            } else {
+                // 遍历所有位置，查找匹配的好友ID
+                for (const id in allLocations) {
+                    if (id === friendId) {
+                        friendLocation = allLocations[id];
+                        console.log('遍历找到好友位置:', friendLocation);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        console.log('最终好友位置:', friendLocation);
         
         if (friendLocation && friendLocation.lat && friendLocation.lng) {
             // 好友已上线
@@ -332,14 +377,21 @@ function startSharing() {
     // 初始化地图
     initMap();
     
+    // 显示加载提示
+    showNotification('正在获取位置信息...');
+    
     // 获取初始位置
     getCurrentLocation()
         .then(coords => {
-            map.setView([coords.lat, coords.lng], 15);
+            console.log('初始位置:', coords);
+            // 移动地图到用户位置
+            map.setView([coords.lat, coords.lng], 18);
+            // 显示位置获取成功提示
+            showNotification('位置获取成功');
         })
         .catch(error => {
             console.error('Error getting location:', error);
-            alert('无法获取位置信息，请检查位置权限');
+            showNotification('无法获取位置信息，请检查位置权限');
         });
     
     // 持续获取位置
@@ -347,6 +399,7 @@ function startSharing() {
         updateUserLocation,
         (error) => {
             console.error('Error watching position:', error);
+            showNotification('位置更新失败，请检查位置权限');
         },
         {
             enableHighAccuracy: true,
