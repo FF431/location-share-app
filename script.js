@@ -550,6 +550,7 @@ function testApiConnection() {
     });
     
     // 测试POST请求
+    testResultContent.innerHTML += '<br>正在测试POST请求...';
     fetch('https://fhw.pythonanywhere.com/api/location', {
         method: 'POST',
         headers: {
@@ -562,8 +563,9 @@ function testApiConnection() {
         })
     })
     .then(response => {
+        testResultContent.innerHTML += `<br>POST响应状态: ${response.status} ${response.statusText}`;
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
         }
         return response.json();
     })
@@ -571,11 +573,13 @@ function testApiConnection() {
         testResultContent.innerHTML += `<br>POST请求成功: ${JSON.stringify(data)}`;
         
         // 测试GET请求
+        testResultContent.innerHTML += '<br>正在测试GET请求...';
         return fetch('https://fhw.pythonanywhere.com/api/locations');
     })
     .then(response => {
+        testResultContent.innerHTML += `<br>GET响应状态: ${response.status} ${response.statusText}`;
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`HTTP error! status: ${response.status} ${response.statusText}`);
         }
         return response.json();
     })
@@ -585,7 +589,12 @@ function testApiConnection() {
     })
     .catch(error => {
         testResultContent.innerHTML += `<br>错误: ${error.message}`;
-        testResultContent.innerHTML += '<br><br>API连接测试失败，请检查后端服务是否正常运行。';
+        testResultContent.innerHTML += '<br>详细错误信息: ' + (error.stack || '无堆栈信息');
+        testResultContent.innerHTML += '<br><br>API连接测试失败，请检查：';
+        testResultContent.innerHTML += '<br>1. PythonAnywhere服务是否正常运行';
+        testResultContent.innerHTML += '<br>2. 网络连接是否正常';
+        testResultContent.innerHTML += '<br>3. API地址是否正确';
+        testResultContent.innerHTML += '<br>4. CORS配置是否正确';
     });
 }
 
