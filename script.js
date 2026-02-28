@@ -3,13 +3,20 @@ let userMarker;
 let friendMarker;
 let watchId;
 let isSharing = false;
+let lastUserLocation = null;
+let lastFriendLocation = null;
+let lastAnalysisTime = 0; // 上次AI分析的时间戳
+const LOCATION_THRESHOLD = 100; // 位置变化阈值，单位：米
+const ANALYSIS_INTERVAL = 3 * 60 * 1000; // AI分析的最短间隔时间，单位：毫秒（3分钟）
 
 // 初始化地图
 function initMap() {
-    map = L.map('map').setView([39.9042, 116.4074], 13);
+    map = L.map('map').setView([39.9042, 116.4074], 15); // 增加默认缩放级别
     
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    // 使用高德地图瓦片图层，显示更详细的地图信息
+    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}', {
+        subdomains: '1234',
+        attribution: '© 高德地图'
     }).addTo(map);
 }
 
@@ -42,15 +49,35 @@ function updateUserLocation(position) {
     const { latitude, longitude } = position.coords;
     const userCoords = [latitude, longitude];
     
-    if (userMarker) {
-        map.removeLayer(userMarker);
+    // 检查位置变化是否超过阈值
+    let shouldUpdate = false;
+    if (!lastUserLocation) {
+        // 首次获取位置，需要更新
+        shouldUpdate = true;
+    } else {
+        // 计算与上次位置的距离
+        const distance = calculateDistance(
+            lastUserLocation.lat, lastUserLocation.lng,
+            latitude, longitude
+        );
+        // 如果距离超过阈值，需要更新
+        shouldUpdate = distance > LOCATION_THRESHOLD;
     }
     
-    userMarker = L.marker(userCoords).addTo(map);
-    userMarker.bindPopup('我').openPopup();
-    
-    // 模拟发送位置到服务器
-    sendLocationToServer(latitude, longitude);
+    if (shouldUpdate) {
+        if (userMarker) {
+            map.removeLayer(userMarker);
+        }
+        
+        userMarker = L.marker(userCoords).addTo(map);
+        userMarker.bindPopup('我').openPopup();
+        
+        // 更新最后位置
+        lastUserLocation = { lat: latitude, lng: longitude };
+        
+        // 模拟发送位置到服务器
+        sendLocationToServer(latitude, longitude);
+    }
 }
 
 // 发送位置到服务器
@@ -99,23 +126,51 @@ function sendLocationToServer(lat, lng) {
 function updateFriendLocation(lat, lng) {
     const friendCoords = [lat, lng];
     
-    if (friendMarker) {
-        map.removeLayer(friendMarker);
+    // 检查位置变化是否超过阈值
+    let shouldUpdate = false;
+    if (!lastFriendLocation) {
+        // 首次获取好友位置，需要更新
+        shouldUpdate = true;
+    } else {
+        // 计算与上次位置的距离
+        const distance = calculateDistance(
+            lastFriendLocation.lat, lastFriendLocation.lng,
+            lat, lng
+        );
+        // 如果距离超过阈值，需要更新
+        shouldUpdate = distance > LOCATION_THRESHOLD;
     }
     
-    friendMarker = L.marker(friendCoords).addTo(map);
-    friendMarker.bindPopup('好友').openPopup();
-    
-    // 调整地图视图以显示两个标记
-    if (userMarker) {
-        const userLatLng = userMarker.getLatLng();
-        const friendLatLng = friendMarker.getLatLng();
-        map.fitBounds(L.latLngBounds([userLatLng, friendLatLng]), { padding: [50, 50] });
+    if (shouldUpdate) {
+        if (friendMarker) {
+            map.removeLayer(friendMarker);
+        }
+        
+        friendMarker = L.marker(friendCoords).addTo(map);
+        friendMarker.bindPopup('好友').openPopup();
+        
+        // 更新最后位置
+        lastFriendLocation = { lat: lat, lng: lng };
+        
+        // 调整地图视图以显示两个标记
+        if (userMarker) {
+            const userLatLng = userMarker.getLatLng();
+            const friendLatLng = friendMarker.getLatLng();
+            map.fitBounds(L.latLngBounds([userLatLng, friendLatLng]), { padding: [50, 50] });
+        }
     }
 }
 
 // 分析位置
 async function analyzeLocations(userLat, userLng, friendLat, friendLng) {
+    // 检查是否达到分析时间间隔
+    const currentTime = Date.now();
+    if (currentTime - lastAnalysisTime < ANALYSIS_INTERVAL) {
+        // 未达到时间间隔，跳过分析
+        console.log('未达到AI分析的最短间隔时间，跳过分析');
+        return;
+    }
+    
     // 计算距离
     const distance = calculateDistance(userLat, userLng, friendLat, friendLng);
     
@@ -125,6 +180,8 @@ async function analyzeLocations(userLat, userLng, friendLat, friendLng) {
         // 调用DeepSeek API进行智能分析
         const analysis = await getDeepSeekAnalysis(userLat, userLng, friendLat, friendLng, distance);
         analysisResult.innerHTML = analysis;
+        // 更新上次分析时间
+        lastAnalysisTime = currentTime;
     } catch (error) {
         console.error('DeepSeek API error:', error);
         //  fallback to local analysis if API fails
@@ -135,6 +192,8 @@ async function analyzeLocations(userLat, userLng, friendLat, friendLng) {
             <strong>建议:</strong> ${distance < 100 ? '你们很近，可以步行见面' : '距离较远，建议使用交通工具'}
         `;
         analysisResult.innerHTML = fallbackAnalysis;
+        // 更新上次分析时间
+        lastAnalysisTime = currentTime;
     }
 }
 
@@ -204,9 +263,29 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 function startSharing() {
     if (isSharing) return;
     
+    // 验证用户ID和好友ID
+    const userId = document.getElementById('userId').value.trim();
+    const friendId = document.getElementById('friendId').value.trim();
+    
+    if (!userId) {
+        alert('请输入用户ID');
+        return;
+    }
+    
+    if (!friendId) {
+        alert('请输入好友ID');
+        return;
+    }
+    
     isSharing = true;
-    document.getElementById('startShare').disabled = true;
-    document.getElementById('stopShare').disabled = false;
+    
+    // 切换到地图界面
+    document.getElementById('login界面').classList.add('hidden');
+    document.getElementById('map界面').classList.add('active');
+    document.getElementById('map界面').style.display = 'flex';
+    
+    // 初始化地图
+    initMap();
     
     // 获取初始位置
     getCurrentLocation()
@@ -237,8 +316,6 @@ function stopSharing() {
     if (!isSharing) return;
     
     isSharing = false;
-    document.getElementById('startShare').disabled = false;
-    document.getElementById('stopShare').disabled = true;
     
     if (watchId) {
         navigator.geolocation.clearWatch(watchId);
@@ -254,13 +331,51 @@ function stopSharing() {
         friendMarker = null;
     }
     
+    // 重置位置变量
+    lastUserLocation = null;
+    lastFriendLocation = null;
+    lastAnalysisTime = 0;
+    
+    // 切换回登录界面
+    document.getElementById('map界面').classList.remove('active');
+    document.getElementById('login界面').classList.remove('hidden');
+    
+    // 等待动画完成后再隐藏
+    setTimeout(() => {
+        document.getElementById('map界面').style.display = 'none';
+        document.getElementById('login界面').style.display = 'flex';
+    }, 500);
+    
+    // 重置分析结果
     document.getElementById('analysisResult').innerHTML = '点击开始共享后显示分析结果';
 }
 
 // 测试API连接
 function testApiConnection() {
-    const analysisResult = document.getElementById('analysisResult');
-    analysisResult.innerHTML = '正在测试API连接...';
+    // 显示测试结果的对话框
+    const testResult = document.createElement('div');
+    testResult.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        max-width: 90%;
+        width: 400px;
+        z-index: 1000;
+    `;
+    testResult.innerHTML = '<h3>API连接测试</h3><div id="testResultContent">正在测试API连接...</div><button id="closeTestResult" style="margin-top: 15px; padding: 10px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">关闭</button>';
+    document.body.appendChild(testResult);
+    
+    const testResultContent = document.getElementById('testResultContent');
+    
+    // 关闭按钮事件
+    document.getElementById('closeTestResult').addEventListener('click', function() {
+        document.body.removeChild(testResult);
+    });
     
     // 测试POST请求
     fetch('https://fhw.pythonanywhere.com/api/location', {
@@ -281,7 +396,7 @@ function testApiConnection() {
         return response.json();
     })
     .then(data => {
-        analysisResult.innerHTML += `<br>POST请求成功: ${JSON.stringify(data)}`;
+        testResultContent.innerHTML += `<br>POST请求成功: ${JSON.stringify(data)}`;
         
         // 测试GET请求
         return fetch('https://fhw.pythonanywhere.com/api/locations');
@@ -293,12 +408,12 @@ function testApiConnection() {
         return response.json();
     })
     .then(data => {
-        analysisResult.innerHTML += `<br>GET请求成功: ${JSON.stringify(data)}`;
-        analysisResult.innerHTML += '<br><br>API连接测试成功！';
+        testResultContent.innerHTML += `<br>GET请求成功: ${JSON.stringify(data)}`;
+        testResultContent.innerHTML += '<br><br>API连接测试成功！';
     })
     .catch(error => {
-        analysisResult.innerHTML += `<br>错误: ${error.message}`;
-        analysisResult.innerHTML += '<br><br>API连接测试失败，请检查后端服务是否正常运行。';
+        testResultContent.innerHTML += `<br>错误: ${error.message}`;
+        testResultContent.innerHTML += '<br><br>API连接测试失败，请检查后端服务是否正常运行。';
     });
 }
 
@@ -307,13 +422,9 @@ function initEventListeners() {
     document.getElementById('startShare').addEventListener('click', startSharing);
     document.getElementById('stopShare').addEventListener('click', stopSharing);
     document.getElementById('testApi').addEventListener('click', testApiConnection);
-    
-    // 初始禁用停止按钮
-    document.getElementById('stopShare').disabled = true;
 }
 
 // 页面加载完成后初始化
 window.onload = function() {
-    initMap();
     initEventListeners();
 };

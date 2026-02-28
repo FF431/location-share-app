@@ -9,19 +9,27 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
 </head>
 <body>
-    <div class="container">
+    <!-- 登录界面 -->
+    <div id="login界面" class="container">
         <h1>位置共享</h1>
-        <div id="map"></div>
-        <div class="controls">
+        <div class="login-form">
             <input type="text" id="userId" placeholder="输入用户ID">
             <input type="text" id="friendId" placeholder="输入好友ID">
             <button id="startShare">开始共享</button>
-            <button id="stopShare">停止共享</button>
             <button id="testApi">测试API连接</button>
+        </div>
+    </div>
+    
+    <!-- 地图和AI分析界面 -->
+    <div id="map界面" class="container" style="display: none;">
+        <h1>位置共享</h1>
+        <div id="map"></div>
+        <div class="controls">
+            <button id="stopShare">停止共享</button>
         </div>
         <div class="ai-analysis">
             <h2>AI分析</h2>
-            <div id="analysisResult">点击开始共享后显示分析结果</div>
+            <div id="analysisResult">正在分析位置...</div>
         </div>
     </div>
     <script src="script.js"></script>
