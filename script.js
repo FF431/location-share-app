@@ -11,16 +11,29 @@ const ANALYSIS_INTERVAL = 3 * 60 * 1000; // AI分析的最短间隔时间，单�
 
 // 初始化地图
 function initMap() {
-    map = L.map('map').setView([39.9042, 116.4074], 18); // 进一步增加默认缩放级别
+    map = L.map('map').setView([39.9042, 116.4074], 16);
     
-    // 使用高德地图高清瓦片图层，显示更详细的地图信息（使用style=6获取更详细的地图数据）
-    L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=2&style=6&x={x}&y={y}&z={z}', {
+    // 使用高德地图矢量地图（能显示道路、商圈、公司等名称）
+    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
         subdomains: '1234',
         attribution: '© 高德地图',
-        maxZoom: 22, // 进一步增加最大缩放级别
-        tileSize: 256,
-        updateWhenIdle: true, // 优化性能
-        reuseTiles: true // 优化性能
+        maxZoom: 19,
+        tileSize: 256
+    }).addTo(map);
+    
+    // 添加高德地图卫星影像图层（可选）
+    const satelliteLayer = L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
+        subdomains: '1234',
+        attribution: '© 高德地图卫星影像',
+        maxZoom: 19
+    });
+    
+    // 添加标注图层（显示POI兴趣点、道路名称等）
+    L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}', {
+        subdomains: '1234',
+        attribution: '',
+        maxZoom: 19,
+        zIndex: 10
     }).addTo(map);
     
     // 添加缩放控件
@@ -194,6 +207,61 @@ function sendLocationToServer(lat, lng) {
         }
         showNotification('无法连接到服务器，请检查网络');
     });
+}
+
+// 定期检查好友位置
+let checkFriendInterval;
+
+// 开始定期检查好友位置
+function startCheckingFriendLocation() {
+    // 每3秒检查一次好友位置
+    checkFriendInterval = setInterval(() => {
+        if (!isSharing) return;
+        
+        const friendId = document.getElementById('friendId').value.trim() || 'user2';
+        if (!friendId) return;
+        
+        console.log('定期检查好友位置...');
+        
+        fetch('https://fhw.pythonanywhere.com/api/locations')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(allLocations => {
+                console.log('定期获取所有位置:', allLocations);
+                
+                // 检查好友位置
+                let friendLocation = null;
+                
+                if (typeof allLocations === 'object' && allLocations !== null) {
+                    if (allLocations.hasOwnProperty(friendId)) {
+                        friendLocation = allLocations[friendId];
+                        console.log('定期检查找到好友位置:', friendLocation);
+                    }
+                }
+                
+                if (friendLocation && friendLocation.lat && friendLocation.lng) {
+                    // 好友已上线
+                    updateFriendLocation(friendLocation.lat, friendLocation.lng);
+                    // 显示好友已上线提示
+                    showNotification('好友已上线');
+                }
+            })
+            .catch(error => {
+                console.error('定期检查好友位置错误:', error);
+            });
+    }, 3000); // 每3秒检查一次
+}
+
+// 停止定期检查好友位置
+function stopCheckingFriendLocation() {
+    if (checkFriendInterval) {
+        clearInterval(checkFriendInterval);
+        checkFriendInterval = null;
+    }
 }
 
 // 显示通知
@@ -385,7 +453,7 @@ function startSharing() {
         .then(coords => {
             console.log('初始位置:', coords);
             // 移动地图到用户位置
-            map.setView([coords.lat, coords.lng], 18);
+            map.setView([coords.lat, coords.lng], 16);
             // 显示位置获取成功提示
             showNotification('位置获取成功');
         })
@@ -407,6 +475,9 @@ function startSharing() {
             maximumAge: 0
         }
     );
+    
+    // 开始定期检查好友位置
+    startCheckingFriendLocation();
 }
 
 // 停止共享位置
@@ -418,6 +489,9 @@ function stopSharing() {
     if (watchId) {
         navigator.geolocation.clearWatch(watchId);
     }
+    
+    // 停止定期检查好友位置
+    stopCheckingFriendLocation();
     
     // 清除标记
     if (userMarker) {
