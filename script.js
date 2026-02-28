@@ -58,19 +58,41 @@ function sendLocationToServer(lat, lng) {
     const userId = document.getElementById('userId').value || 'user1';
     const friendId = document.getElementById('friendId').value || 'user2';
     
-    // 模拟API请求
-    console.log(`发送位置到服务器: 用户${userId} - 纬度: ${lat}, 经度: ${lng}`);
-    
-    // 模拟接收好友位置
-    setTimeout(() => {
-        // 模拟好友位置（实际应该从服务器获取）
+    // 发送位置到PythonAnywhere后端
+    fetch('https://fhw.pythonanywhere.com/api/location', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            userId: userId,
+            lat: lat,
+            lng: lng
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('位置发送成功:', data);
+        
+        // 获取好友位置
+        return fetch(`https://fhw.pythonanywhere.com/api/location/${friendId}`);
+    })
+    .then(response => response.json())
+    .then(friendLocation => {
+        if (friendLocation.lat && friendLocation.lng) {
+            updateFriendLocation(friendLocation.lat, friendLocation.lng);
+            // 调用AI分析
+            analyzeLocations(lat, lng, friendLocation.lat, friendLocation.lng);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        // 模拟好友位置作为fallback
         const friendLat = lat + (Math.random() - 0.5) * 0.01;
         const friendLng = lng + (Math.random() - 0.5) * 0.01;
         updateFriendLocation(friendLat, friendLng);
-        
-        // 调用AI分析
         analyzeLocations(lat, lng, friendLat, friendLng);
-    }, 500);
+    });
 }
 
 // 更新好友位置
@@ -235,10 +257,56 @@ function stopSharing() {
     document.getElementById('analysisResult').innerHTML = '点击开始共享后显示分析结果';
 }
 
+// 测试API连接
+function testApiConnection() {
+    const analysisResult = document.getElementById('analysisResult');
+    analysisResult.innerHTML = '正在测试API连接...';
+    
+    // 测试POST请求
+    fetch('https://fhw.pythonanywhere.com/api/location', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            userId: 'test',
+            lat: 39.9042,
+            lng: 116.4074
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        analysisResult.innerHTML += `<br>POST请求成功: ${JSON.stringify(data)}`;
+        
+        // 测试GET请求
+        return fetch('https://fhw.pythonanywhere.com/api/locations');
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        analysisResult.innerHTML += `<br>GET请求成功: ${JSON.stringify(data)}`;
+        analysisResult.innerHTML += '<br><br>API连接测试成功！';
+    })
+    .catch(error => {
+        analysisResult.innerHTML += `<br>错误: ${error.message}`;
+        analysisResult.innerHTML += '<br><br>API连接测试失败，请检查后端服务是否正常运行。';
+    });
+}
+
 // 初始化事件监听器
 function initEventListeners() {
     document.getElementById('startShare').addEventListener('click', startSharing);
     document.getElementById('stopShare').addEventListener('click', stopSharing);
+    document.getElementById('testApi').addEventListener('click', testApiConnection);
     
     // 初始禁用停止按钮
     document.getElementById('stopShare').disabled = true;
