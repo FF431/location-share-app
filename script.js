@@ -107,19 +107,50 @@ function sendLocationToServer(lat, lng) {
     .then(response => response.json())
     .then(friendLocation => {
         if (friendLocation.lat && friendLocation.lng) {
+            // 好友已上线
             updateFriendLocation(friendLocation.lat, friendLocation.lng);
+            // 显示好友已上线提示
+            showNotification('好友已上线');
             // 调用AI分析
             analyzeLocations(lat, lng, friendLocation.lat, friendLocation.lng);
+        } else {
+            // 好友未上线，只显示自己位置
+            if (friendMarker) {
+                map.removeLayer(friendMarker);
+                friendMarker = null;
+                lastFriendLocation = null;
+            }
+            // 显示好友未上线提示
+            showNotification('好友未上线');
+            // 只更新自己的位置，不进行AI分析
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        // 模拟好友位置作为fallback
-        const friendLat = lat + (Math.random() - 0.5) * 0.01;
-        const friendLng = lng + (Math.random() - 0.5) * 0.01;
-        updateFriendLocation(friendLat, friendLng);
-        analyzeLocations(lat, lng, friendLat, friendLng);
+        // 错误情况下，显示好友未上线
+        if (friendMarker) {
+            map.removeLayer(friendMarker);
+            friendMarker = null;
+            lastFriendLocation = null;
+        }
+        showNotification('好友未上线');
     });
+}
+
+// 显示通知
+function showNotification(message) {
+    const analysisResult = document.getElementById('analysisResult');
+    // 保留原有的分析结果，在顶部添加通知
+    const currentContent = analysisResult.innerHTML;
+    analysisResult.innerHTML = `<div class="notification">${message}</div>${currentContent}`;
+    
+    // 3秒后移除通知
+    setTimeout(() => {
+        const notification = analysisResult.querySelector('.notification');
+        if (notification) {
+            notification.remove();
+        }
+    }, 3000);
 }
 
 // 更新好友位置

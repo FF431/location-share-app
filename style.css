@@ -144,6 +144,28 @@ h1 {
     line-height: 1.5;
 }
 
+/* 通知样式 */
+.notification {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    border-left: 4px solid #1976d2;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* 滚动条样式 */
 .ai-analysis::-webkit-scrollbar {
     width: 6px;
